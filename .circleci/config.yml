@@ -1,0 +1,98 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/golang:1.13
+
+    working_directory: ~/repo
+    steps:
+      - checkout
+
+      - run:
+          name: "Go Lint: gofmt"
+          when: always
+          command: |
+            ! gofmt -l -s -d . | grep '^'
+
+      - run:
+          name: Download GolangCI-Lint
+          when: always
+          command: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.22.2
+
+      - run:
+          name: "Go Lint: golangci-lint"
+          when: always
+          command: ./bin/golangci-lint run --enable-all -D gomnd -D wsl ./...
+
+      - run:
+          name: Download Linters
+          when: always
+          command: |
+            go get -u golang.org/x/tools/cmd/goimports
+            go get -u github.com/kisielk/errcheck
+            go get -u golang.org/x/lint/golint
+            go get -u github.com/mdempsky/unconvert
+            go get -u github.com/client9/misspell/cmd/misspell
+            go get -u honnef.co/go/tools/cmd/staticcheck
+            go get -u github.com/tommy-muehle/go-mnd/cmd/mnd
+            go get -u github.com/quasilyte/go-consistent
+            go get -u mvdan.cc/gofumpt
+
+      - run:
+          name: "Go Lint: gofumpt"
+          when: always
+          command: |
+            ! gofumpt -l -s -d . | grep '^'
+
+      - run:
+          name: "Go Lint: goimports"
+          when: always
+          command: |
+            ! goimports -l -d . | grep '^'
+
+      - run:
+          name: "Go Lint: errcheck"
+          when: always
+          command: errcheck -blank -asserts ./...
+
+      - run:
+          name: "Go Lint: golint"
+          when: always
+          command: golint -set_exit_status ./...
+
+      - run:
+          name: "Go Lint: unconvert"
+          when: always
+          command: unconvert ./...
+
+      - run:
+          name: "Go Lint: misspell"
+          when: always
+          command: |
+            GO_FILES=$(find . -type f -iname "*.go")
+            misspell -error -locale US $GO_FILES
+
+      - run:
+          name: "Go Lint: staticcheck"
+          when: always
+          command: staticcheck ./...
+
+      - run:
+          name: "Go Lint: Magic Numbers"
+          when: always
+          command: |
+            ! mnd ./... 2>&1 | grep -v _test.go
+
+      - run:
+          name: "Go Lint: Go Consistent"
+          when: always
+          command: go-consistent -pedantic ./...
+
+      - run:
+          name: Go Build
+          when: always
+          command: go build -o html2xterm ./cmd/html2xterm
+
+      - run:
+          name: Go Unit Tests
+          command: go test -count 1 -cpu 1,2,4 --race ./...
