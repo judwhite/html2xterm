@@ -14,7 +14,7 @@ func loadFile(t *testing.T, filename string) string {
 	return string(b)
 }
 
-func TestConvertString(t *testing.T) {
+func TestConvert(t *testing.T) {
 	cases := []struct {
 		html       string
 		outputType string
