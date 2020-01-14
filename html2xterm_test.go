@@ -1,7 +1,6 @@
 package html2xterm
 
 import (
-	"fmt"
 	"io/ioutil"
 	"strings"
 	"testing"
@@ -17,40 +16,85 @@ func loadFile(t *testing.T, filename string) string {
 
 func TestConvert(t *testing.T) {
 	cases := []struct {
-		html     string
-		expected string
+		html       string
+		outputType string
+		expected   string
 	}{
 		{
-			html:     loadFile(t, `testdata/001_input_div_span.html`),
-			expected: loadFile(t, `testdata/001_output_string.txt`),
+			html:       loadFile(t, `testdata/001_input_div_span.html`),
+			outputType: "string",
+			expected:   loadFile(t, `testdata/001_output_string.txt`),
 		},
 		{
-			html:     loadFile(t, `testdata/002_input_font_br.html`),
-			expected: loadFile(t, `testdata/002_output_string.txt`),
+			html:       loadFile(t, `testdata/002_input_font_br.html`),
+			outputType: "string",
+			expected:   loadFile(t, `testdata/002_output_string.txt`),
+		},
+		{
+			html:       loadFile(t, `testdata/003_input_html_span_br.html`),
+			outputType: "ansi",
+			expected:   loadFile(t, `testdata/003_output_ansi.ans`),
+		},
+		{
+			html:       loadFile(t, `testdata/003_input_html_span_br.html`),
+			outputType: "xtermjs",
+			expected:   loadFile(t, `testdata/003_output_xterm.js`),
 		},
 	}
 
 	for _, c := range cases {
-		actual, err := Convert(c.html)
+		output, err := Convert(c.html)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if c.expected != actual.String() {
-			t.Errorf("\nwant:\n---\n%s\n---\ngot:\n---\n%s\n---", c.expected, actual)
+		var actual string
+		switch c.outputType {
+		case "string":
+			actual = output.String()
+		case "ansi":
+			actual = output.ANSI()
+		case "xtermjs":
+			actual = output.JS()
+		default:
+			t.Errorf("unknown output type '%s'", c.outputType)
+			continue
+		}
 
-			expectedLines := strings.Split(c.expected, "\n")
-			actualLines := strings.Split(actual.String(), "\n")
+		assertEqual(t, c.expected, actual)
+	}
+}
 
-			for i := 0; i < len(expectedLines) && i < len(actualLines); i++ {
-				if expectedLines[i] != actualLines[i] {
-					t.Errorf("first difference:\n\nwant: '%s'\n      %v\ngot:  '%s'\n      %v\n",
-						expectedLines[i], []byte(expectedLines[i]), actualLines[i], []byte(actualLines[i]))
+func assertEqual(t *testing.T, expected, actual string) {
+	if expected == actual {
+		return
+	}
+
+	t.Errorf("\nwant:\n---\n%s\n---\ngot:\n---\n%s\n---", expected, actual)
+
+	expectedLines := strings.Split(expected, "\n")
+	actualLines := strings.Split(actual, "\n")
+
+	for i := 0; i < len(expectedLines) && i < len(actualLines); i++ {
+		if expectedLines[i] != actualLines[i] {
+			if len(expectedLines[i]) > 200 {
+				found := false
+				for j := 0; j < len(expectedLines[i]) && j < len(actualLines[i]); j++ {
+					if expectedLines[i][j] != actualLines[i][j] {
+						t.Errorf("first difference at line %d pos %d: want: '%c' %v got: '%c' %v", i, j,
+							expectedLines[i][j], expectedLines[i][j], actualLines[i][j], actualLines[i][j])
+						found = true
+						break
+					}
+				}
+				if found {
 					break
 				}
 			}
-		}
 
-		fmt.Println(actual.ANSI())
+			t.Errorf("first difference:\n\nwant: '%s'\n      %v\ngot:  '%s'\n      %v\n",
+				expectedLines[i], []byte(expectedLines[i]), actualLines[i], []byte(actualLines[i]))
+			break
+		}
 	}
 }
