@@ -70,9 +70,9 @@ func assertEqual(t *testing.T, expected, actual string) {
 		return
 	}
 
-	t.Errorf("\nwant:\n---\n%s\n---\ngot:\n---\n%s\n---", c.expected, actual)
+	t.Errorf("\nwant:\n---\n%s\n---\ngot:\n---\n%s\n---", expected, actual)
 
-	expectedLines := strings.Split(c.expected, "\n")
+	expectedLines := strings.Split(expected, "\n")
 	actualLines := strings.Split(actual, "\n")
 
 	for i := 0; i < len(expectedLines) && i < len(actualLines); i++ {
