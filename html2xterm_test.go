@@ -14,7 +14,7 @@ func loadFile(t *testing.T, filename string) string {
 	return string(b)
 }
 
-func TestConvert(t *testing.T) {
+func TestConvertString(t *testing.T) {
 	cases := []struct {
 		html       string
 		outputType string
@@ -61,34 +61,40 @@ func TestConvert(t *testing.T) {
 			continue
 		}
 
-		if c.expected != actual {
-			t.Errorf("\nwant:\n---\n%s\n---\ngot:\n---\n%s\n---", c.expected, actual)
+		assertEqual(t, c.expected, actual)
+	}
+}
 
-			expectedLines := strings.Split(c.expected, "\n")
-			actualLines := strings.Split(actual, "\n")
+func assertEqual(t *testing.T, expected, actual string) {
+	if expected == actual {
+		return
+	}
 
-			for i := 0; i < len(expectedLines) && i < len(actualLines); i++ {
-				if expectedLines[i] != actualLines[i] {
-					if len(expectedLines[i]) > 200 {
-						found := false
-						for j := 0; j < len(expectedLines[i]) && j < len(actualLines[i]); j++ {
-							if expectedLines[i][j] != actualLines[i][j] {
-								t.Errorf("first difference at line %d pos %d: want: '%c' %v got: '%c' %v", i, j,
-									expectedLines[i][j], expectedLines[i][j], actualLines[i][j], actualLines[i][j])
-								found = true
-								break
-							}
-						}
-						if found {
-							break
-						}
+	t.Errorf("\nwant:\n---\n%s\n---\ngot:\n---\n%s\n---", c.expected, actual)
+
+	expectedLines := strings.Split(c.expected, "\n")
+	actualLines := strings.Split(actual, "\n")
+
+	for i := 0; i < len(expectedLines) && i < len(actualLines); i++ {
+		if expectedLines[i] != actualLines[i] {
+			if len(expectedLines[i]) > 200 {
+				found := false
+				for j := 0; j < len(expectedLines[i]) && j < len(actualLines[i]); j++ {
+					if expectedLines[i][j] != actualLines[i][j] {
+						t.Errorf("first difference at line %d pos %d: want: '%c' %v got: '%c' %v", i, j,
+							expectedLines[i][j], expectedLines[i][j], actualLines[i][j], actualLines[i][j])
+						found = true
+						break
 					}
-
-					t.Errorf("first difference:\n\nwant: '%s'\n      %v\ngot:  '%s'\n      %v\n",
-						expectedLines[i], []byte(expectedLines[i]), actualLines[i], []byte(actualLines[i]))
+				}
+				if found {
 					break
 				}
 			}
+
+			t.Errorf("first difference:\n\nwant: '%s'\n      %v\ngot:  '%s'\n      %v\n",
+				expectedLines[i], []byte(expectedLines[i]), actualLines[i], []byte(actualLines[i]))
+			break
 		}
 	}
 }
