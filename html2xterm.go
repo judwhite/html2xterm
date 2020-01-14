@@ -133,9 +133,8 @@ func tidyHTML(html string) (string, error) {
 }
 
 func parseLine(text string) (Line, error) {
-	var line Line
 	if len(text) == 0 {
-		return line, nil
+		return Line{}, nil
 	}
 
 	var lines []string
@@ -145,9 +144,10 @@ func parseLine(text string) (Line, error) {
 	case strings.Contains(text, "<font"):
 		lines = strings.SplitAfter(text, "</font>")
 	default:
-		return line, fmt.Errorf("line: '%s', can't find <span> or <font>", text)
+		return Line{}, fmt.Errorf("line: '%s', can't find <span> or <font>", text)
 	}
 
+	var line Line
 	for _, s := range lines {
 		s = strings.TrimSpace(s)
 		s = strings.TrimSuffix(s, "</font>")
@@ -175,21 +175,6 @@ func parseLine(text string) (Line, error) {
 			return line, fmt.Errorf("fragment: '%s ...': %w", s, err)
 		}
 
-		if len(line.Segments) != 0 {
-			i := len(line.Segments) - 1
-			prev := line.Segments[i]
-			// combine segments with same color
-			if prev.Color == segColor {
-				line.Segments[i].Text += text
-				continue
-			}
-			// combine segments that are both only whitespace
-			if strings.TrimSpace(prev.Text) == "" && strings.TrimSpace(text) == "" {
-				line.Segments[i].Text += text
-				continue
-			}
-		}
-
 		segment := Segment{
 			Text:  text,
 			Color: segColor,
@@ -198,16 +183,33 @@ func parseLine(text string) (Line, error) {
 		line.Segments = append(line.Segments, segment)
 	}
 
+	line.Segments = combineSimilarSegments(line.Segments)
+
+	return line, nil
+}
+
+func combineSimilarSegments(segments []Segment) []Segment {
+	for i := 1; i < len(segments); i++ {
+		prev := i - 1
+		// combine segments that are either the same color or both only whitespace
+		if segments[prev].Color == segments[i].Color ||
+			strings.TrimSpace(segments[prev].Text) == "" && strings.TrimSpace(segments[i].Text) == "" {
+			segments[prev].Text += segments[i].Text
+			segments = append(segments[:i], segments[i+1:]...)
+			i--
+		}
+	}
+
 	// trim trailing whitespace
-	for i := len(line.Segments) - 1; i >= 0; i-- {
-		seg := line.Segments[i]
+	for i := len(segments) - 1; i >= 0; i-- {
+		seg := segments[i]
 		if strings.TrimSpace(seg.Text) != "" {
 			break
 		}
-		line.Segments = line.Segments[:i]
+		segments = segments[:i]
 	}
 
-	return line, nil
+	return segments
 }
 
 func parseColor(attrs string) (Color, error) {
