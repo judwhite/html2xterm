@@ -46,11 +46,12 @@ func (o Output) ANSI() string {
 }
 
 // JS returns an unquoted JavaScript string of the ANSI output.
-// The string is escaped to work inside double-quotes (").
+// The string is escaped to work inside either double or single quotes.
 func (o Output) JS() string {
 	text := strings.ReplaceAll(o.ANSI(), "\n", "\r\n")
 	text = strings.ReplaceAll(text, `\`, `\\`)
-	text = strings.ReplaceAll(text, `"`, `\"`)
+	text = strings.ReplaceAll(text, `'`, `\x27`)
+	text = strings.ReplaceAll(text, `"`, `\x22`)
 	text = strings.ReplaceAll(text, "\r", `\r`)
 	text = strings.ReplaceAll(text, "\n", `\n`)
 	text = strings.ReplaceAll(text, "\x1b", `\x1b`)
@@ -102,11 +103,12 @@ func (l Line) ANSI() string {
 }
 
 // JS returns an unquoted JavaScript string of the ANSI output.
-// The string is escaped to work inside double-quotes (").
+// The string is escaped to work inside either double or single quotes.
 func (l Line) JS() string {
 	text := l.ANSI() + "\x1b[0m"
 	text = strings.ReplaceAll(text, `\`, `\\`)
-	text = strings.ReplaceAll(text, `"`, `\"`)
+	text = strings.ReplaceAll(text, `'`, `\x27`)
+	text = strings.ReplaceAll(text, `"`, `\x22`)
 	text = strings.ReplaceAll(text, "\x1b", `\x1b`)
 	return text
 }

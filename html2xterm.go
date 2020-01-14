@@ -214,10 +214,12 @@ func parseLine(text string) (Line, error) {
 		if len(line.Segments) != 0 {
 			i := len(line.Segments) - 1
 			prev := line.Segments[i]
+			// combine segments with same color
 			if prev.Color == segColor {
 				line.Segments[i].Text += text
 				continue
 			}
+			// combine segments that are both only whitespace
 			if strings.TrimSpace(prev.Text) == "" && strings.TrimSpace(text) == "" {
 				line.Segments[i].Text += text
 				continue

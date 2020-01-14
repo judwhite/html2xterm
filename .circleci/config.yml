@@ -95,4 +95,5 @@ jobs:
 
       - run:
           name: Go Unit Tests
+          when: always
           command: go test -count 1 -cpu 1,2,4 --race ./...
