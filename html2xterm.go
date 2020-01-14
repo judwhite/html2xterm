@@ -2,6 +2,7 @@ package html2xterm
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"html"
 	"strings"
@@ -20,50 +21,9 @@ import (
 func Convert(html string) (Output, error) {
 	var result Output
 
-	html = strings.ReplaceAll(html, "\n", "")
-	html = strings.ReplaceAll(html, "\r", "")
-	html = strings.ReplaceAll(html, "</body>", "")
-	html = strings.ReplaceAll(html, "</html>", "")
-	html = strings.ReplaceAll(html, "<pre>", "")
-	html = strings.ReplaceAll(html, "</pre>", "")
-
-	html = strings.ReplaceAll(html, "&nbsp;", " ")
-
-	html = strings.ReplaceAll(html, "<DIV>", "<div>")
-	html = strings.ReplaceAll(html, "</DIV>", "</div>")
-	html = strings.ReplaceAll(html, "<SPAN", "<span")
-	html = strings.ReplaceAll(html, "</SPAN", "</span>")
-	html = strings.ReplaceAll(html, "<FONT", "<font")
-	html = strings.ReplaceAll(html, "</FONT>", "</font>")
-	html = strings.ReplaceAll(html, "<br/>", "<br>")
-	html = strings.ReplaceAll(html, "<br />", "<br>")
-	html = strings.ReplaceAll(html, "<BR/>", "<br>")
-	html = strings.ReplaceAll(html, "<BR />", "<br>")
-
-	bodyStart := strings.Index(html, "<body")
-	if bodyStart != -1 {
-		end := strings.Index(html[bodyStart:], ">")
-		if end == -1 {
-			return Output{}, fmt.Errorf("found '<body' but could not find closing '>'")
-		}
-		html = html[bodyStart+end+1:]
-	}
-
-	const beginComment = "<!-- IMAGE BEGINS HERE -->"
-	const endComment = "<!-- IMAGE ENDS HERE -->"
-	commentStart := strings.Index(html, beginComment)
-	if commentStart != -1 {
-		html = html[commentStart+len(beginComment):]
-		commentEnd := strings.Index(html, endComment)
-		if commentEnd != -1 {
-			html = html[:commentEnd]
-		}
-	}
-
-	if strings.HasPrefix(html, "<font size=") {
-		start := strings.Index(html, ">")
-		html = html[start+1:]
-		html = strings.TrimSuffix(html, "</font>")
+	html, err := tidyHTML(html)
+	if err != nil {
+		return Output{}, err
 	}
 
 	for {
@@ -121,6 +81,57 @@ func Convert(html string) (Output, error) {
 	return result, nil
 }
 
+func tidyHTML(html string) (string, error) {
+	html = strings.ReplaceAll(html, "\n", "")
+	html = strings.ReplaceAll(html, "\r", "")
+	html = strings.ReplaceAll(html, "</body>", "")
+	html = strings.ReplaceAll(html, "</html>", "")
+	html = strings.ReplaceAll(html, "<pre>", "")
+	html = strings.ReplaceAll(html, "</pre>", "")
+
+	html = strings.ReplaceAll(html, "&nbsp;", " ")
+
+	html = strings.ReplaceAll(html, "<DIV>", "<div>")
+	html = strings.ReplaceAll(html, "</DIV>", "</div>")
+	html = strings.ReplaceAll(html, "<SPAN", "<span")
+	html = strings.ReplaceAll(html, "</SPAN", "</span>")
+	html = strings.ReplaceAll(html, "<FONT", "<font")
+	html = strings.ReplaceAll(html, "</FONT>", "</font>")
+	html = strings.ReplaceAll(html, "<br/>", "<br>")
+	html = strings.ReplaceAll(html, "<br />", "<br>")
+	html = strings.ReplaceAll(html, "<BR>", "<br>")
+	html = strings.ReplaceAll(html, "<BR/>", "<br>")
+	html = strings.ReplaceAll(html, "<BR />", "<br>")
+
+	bodyStart := strings.Index(html, "<body")
+	if bodyStart != -1 {
+		end := strings.Index(html[bodyStart:], ">")
+		if end == -1 {
+			return html, fmt.Errorf("found '<body' but could not find closing '>'")
+		}
+		html = html[bodyStart+end+1:]
+	}
+
+	const beginComment = "<!-- IMAGE BEGINS HERE -->"
+	const endComment = "<!-- IMAGE ENDS HERE -->"
+	commentStart := strings.Index(html, beginComment)
+	if commentStart != -1 {
+		html = html[commentStart+len(beginComment):]
+		commentEnd := strings.Index(html, endComment)
+		if commentEnd != -1 {
+			html = html[:commentEnd]
+		}
+	}
+
+	if strings.HasPrefix(html, "<font size=") {
+		start := strings.Index(html, ">")
+		html = html[start+1:]
+		html = strings.TrimSuffix(html, "</font>")
+	}
+
+	return html, nil
+}
+
 func parseLine(text string) (Line, error) {
 	var line Line
 	if len(text) == 0 {
@@ -159,57 +170,10 @@ func parseLine(text string) (Line, error) {
 			continue
 		}
 
-		// look for color= or style= ...
-		// anything after '>' is text
-		var r, g, b uint8
-		attrs := s[5:textStart]
-		colorIndex := strings.Index(attrs, "color")
-		if colorIndex != -1 {
-			attrs = attrs[colorIndex:]
-			attrs = strings.ReplaceAll(attrs, `'`, `"`)
-			attrs = strings.ReplaceAll(attrs, `="`, `:`)
-			semiEnd := strings.Index(attrs, `;`)
-			quotEnd := strings.Index(attrs, `"`)
-
-			switch {
-			case semiEnd < quotEnd && semiEnd != -1:
-				attrs = attrs[:semiEnd]
-			case quotEnd != -1:
-				attrs = attrs[:quotEnd]
-			default:
-				return line, fmt.Errorf("fragment: '%s ...', missing ';' or '\"'", s)
-			}
-			attrs = strings.TrimSpace(strings.TrimPrefix(attrs, "color:"))
-
-			if strings.HasPrefix(attrs, "#") {
-				attrs = attrs[1:] // trim '#' prefix
-				if len(attrs) == 3 {
-					// convert 'abc' to 'aabbcc'
-					attrs = fmt.Sprintf("%[1]c%[1]c%[2]c%[2]c%[3]c%[3]c", attrs[0], attrs[1], attrs[2])
-				}
-				if len(attrs) != 6 {
-					return line, fmt.Errorf("fragment: '%s ...', unknown color '%s'", s, attrs)
-				}
-				col, err := hex.DecodeString(attrs)
-				if err != nil {
-					return line, fmt.Errorf("fragment: '%s ...', error decoding color '%s': %w", s, attrs, err)
-				}
-				r, g, b = col[0], col[1], col[2]
-			} else {
-				switch strings.ToLower(attrs) {
-				case "black":
-					r, g, b = 0, 0, 0
-				case "white":
-					r, g, b = 255, 255, 255
-				default:
-					return line, fmt.Errorf("fragment: '%s ...', unknown color '%s'", s, attrs)
-				}
-			}
-		} else {
-			return line, fmt.Errorf("fragment: '%s ...', can't find color in '%s'", s, attrs)
+		segColor, err := parseColor(s[5:textStart])
+		if err != nil {
+			return line, fmt.Errorf("fragment: '%s ...': %w", s, err)
 		}
-
-		segColor := Color{R: r, G: g, B: b}
 
 		if len(line.Segments) != 0 {
 			i := len(line.Segments) - 1
@@ -244,4 +208,57 @@ func parseLine(text string) (Line, error) {
 	}
 
 	return line, nil
+}
+
+func parseColor(attrs string) (Color, error) {
+	// look for color= or style= ...
+	// anything after '>' is text
+	var r, g, b uint8
+	colorIndex := strings.Index(attrs, "color")
+	if colorIndex == -1 {
+		return Color{}, fmt.Errorf("can't find 'color' in '%s'", attrs)
+	}
+
+	attrs = attrs[colorIndex:]
+	attrs = strings.ReplaceAll(attrs, `'`, `"`)
+	attrs = strings.ReplaceAll(attrs, `="`, `:`)
+	semiEnd := strings.Index(attrs, `;`)
+	quotEnd := strings.Index(attrs, `"`)
+
+	switch {
+	case semiEnd < quotEnd && semiEnd != -1:
+		attrs = attrs[:semiEnd]
+	case quotEnd != -1:
+		attrs = attrs[:quotEnd]
+	default:
+		return Color{}, errors.New("missing ';' or '\"'")
+	}
+	attrs = strings.TrimSpace(strings.TrimPrefix(attrs, "color:"))
+
+	if strings.HasPrefix(attrs, "#") {
+		attrs = attrs[1:] // trim '#' prefix
+		if len(attrs) == 3 {
+			// convert 'abc' to 'aabbcc'
+			attrs = fmt.Sprintf("%[1]c%[1]c%[2]c%[2]c%[3]c%[3]c", attrs[0], attrs[1], attrs[2])
+		}
+		if len(attrs) != 6 {
+			return Color{}, fmt.Errorf("unknown color '%s', expected len=6", attrs)
+		}
+		col, err := hex.DecodeString(attrs)
+		if err != nil {
+			return Color{}, fmt.Errorf("error decoding color '%s': %w", attrs, err)
+		}
+		r, g, b = col[0], col[1], col[2]
+	} else {
+		switch strings.ToLower(attrs) {
+		case "black":
+			r, g, b = 0, 0, 0
+		case "white":
+			r, g, b = 255, 255, 255
+		default:
+			return Color{}, fmt.Errorf("unknown color '%s'", attrs)
+		}
+	}
+
+	return Color{R: r, G: g, B: b}, nil
 }
