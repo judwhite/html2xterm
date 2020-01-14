@@ -7,6 +7,16 @@ import (
 	"strings"
 )
 
+// Convert converts HTML to an Output which can be used to extract ANSI or xterm.js strings.
+//
+// Specifically, this function looks for <span> and <font> tags with "color" attributes or "style"
+// attributes which specify a color. Tags surrounded in <div></div> are treated as individual lines
+// and <br> creates a new line.
+//
+// It's known to work with the HTML output of a few sites:
+// - http://patorjk.com/text-color-fader/
+// - https://asciiart.club/
+// - https://www.text-image.com/convert/
 func Convert(html string) (Output, error) {
 	var result Output
 
@@ -62,14 +72,12 @@ func Convert(html string) (Output, error) {
 		var end int
 
 		if useDiv {
-			// TODO: should probably do something about nested divs
 			html = html[start+len("<div>"):]
 			end = strings.Index(html, "</div>")
 			if end == -1 {
 				end = len(html)
 			}
 		} else {
-			start = 0
 			end = strings.Index(html, "<br>")
 			if end == -1 {
 				end = len(html)
@@ -81,7 +89,8 @@ func Convert(html string) (Output, error) {
 			return result, fmt.Errorf("fragment: '%v': %w", []byte(html[:end]), err)
 		}
 
-		if len(line.Segments) != 0 || len(result.Lines) > 0 {
+		// don't add blank lines to the beginning
+		if len(line.Segments) != 0 || len(result.Lines) != 0 {
 			result.Lines = append(result.Lines, line)
 		}
 
@@ -119,12 +128,12 @@ func parseLine(text string) (Line, error) {
 	}
 
 	var lines []string
-	if strings.Contains(text, "<span") {
+	switch {
+	case strings.Contains(text, "<span"):
 		lines = strings.SplitAfter(text, "</span>")
-	} else if strings.Contains(text, "<font") {
+	case strings.Contains(text, "<font"):
 		lines = strings.SplitAfter(text, "</font>")
-	} else {
-		// TODO: maybe check if strings.TrimSpace(html) returns a non-empty string
+	default:
 		return line, fmt.Errorf("line: '%s', can't find <span> or <font>", text)
 	}
 
@@ -161,18 +170,21 @@ func parseLine(text string) (Line, error) {
 			attrs = strings.ReplaceAll(attrs, `="`, `:`)
 			semiEnd := strings.Index(attrs, `;`)
 			quotEnd := strings.Index(attrs, `"`)
-			if semiEnd < quotEnd && semiEnd != -1 {
+
+			switch {
+			case semiEnd < quotEnd && semiEnd != -1:
 				attrs = attrs[:semiEnd]
-			} else if quotEnd != -1 {
+			case quotEnd != -1:
 				attrs = attrs[:quotEnd]
-			} else {
+			default:
 				return line, fmt.Errorf("fragment: '%s ...', missing ';' or '\"'", s)
 			}
 			attrs = strings.TrimSpace(strings.TrimPrefix(attrs, "color:"))
 
 			if strings.HasPrefix(attrs, "#") {
-				attrs = attrs[1:] // trim #
+				attrs = attrs[1:] // trim '#' prefix
 				if len(attrs) == 3 {
+					// convert 'abc' to 'aabbcc'
 					attrs = fmt.Sprintf("%[1]c%[1]c%[2]c%[2]c%[3]c%[3]c", attrs[0], attrs[1], attrs[2])
 				}
 				if len(attrs) != 6 {
@@ -199,7 +211,7 @@ func parseLine(text string) (Line, error) {
 
 		segColor := Color{R: r, G: g, B: b}
 
-		if len(line.Segments) > 0 {
+		if len(line.Segments) != 0 {
 			i := len(line.Segments) - 1
 			prev := line.Segments[i]
 			if prev.Color == segColor {

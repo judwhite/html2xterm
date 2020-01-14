@@ -1,7 +1,10 @@
 package html2xterm
 
-func Center(width int, outputs ...Output) []Output {
-	maxWidth := width
+// Center returns a slice of Output's centered together.
+// If no outputs are at least minWidth in length, then they are centered using minWidth.
+// It is valid to call this function with midWidth set to 0.
+func Center(minWidth int, outputs ...Output) []Output {
+	maxWidth := minWidth
 
 	for i := 0; i < len(outputs); i++ {
 		outputWidth := outputs[i].MaxLength()
@@ -11,7 +14,7 @@ func Center(width int, outputs ...Output) []Output {
 	}
 
 	for i := 0; i < len(outputs); i++ {
-		outputs[i].AdjustWidth(maxWidth)
+		outputs[i].Center(maxWidth)
 	}
 
 	return outputs
